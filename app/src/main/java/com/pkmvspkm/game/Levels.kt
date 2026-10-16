@@ -21,7 +21,7 @@ val LEVELS = listOf(
         pool = listOf(EnemyType.ZUBAT, EnemyType.MURKROW),
         count = 12,
         interval = 6f,
-        startSun = 150,
+        startSun = 200,
         bossAtEnd = false,
     ),
     LevelDef(
@@ -30,7 +30,7 @@ val LEVELS = listOf(
         pool = listOf(EnemyType.ZUBAT, EnemyType.MURKROW, EnemyType.SABLEYE, EnemyType.WEAVILE),
         count = 20,
         interval = 4.5f,
-        startSun = 150,
+        startSun = 200,
         bossAtEnd = false,
     ),
     LevelDef(
@@ -39,7 +39,7 @@ val LEVELS = listOf(
         pool = listOf(EnemyType.MURKROW, EnemyType.SABLEYE, EnemyType.WEAVILE),
         count = 25,
         interval = 4f,
-        startSun = 175,
+        startSun = 225,
         bossAtEnd = true,
     ),
 )

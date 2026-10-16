@@ -2,8 +2,8 @@
 
 A Plants-vs-Zombies style tower defense game for Android, written in Kotlin.
 Place Pokemon defenders on the grid, collect sun to pay for them, and stop the
-evil Pokemon (Zubat, Murkrow, Sableye, Weavile, and finally Gengar) before they
-reach your side. Each lane has one Poke Ball trap that clears it once.
+evil Pokemon before they reach your side. Each lane has one Poke Ball trap that clears it once.
+Tap **Pokedex** in the menu to see what every Pokemon does.
 
 ## Build the APK
 
@@ -23,5 +23,5 @@ The sprites are Nintendo / Game Freak artwork. This is fine for personal use, bu
 
 - `app/src/main/java/com/pkmvspkm/game/Battle.kt`: game rules, enemies, defenders, sun, and trap logic (no Android code)
 - `app/src/main/java/com/pkmvspkm/game/Levels.kt`: level definitions (enemy pool, count, spacing)
-- `app/src/main/java/com/pkmvspkm/game/GameView.kt`: drawing and touch input
+- `app/src/main/java/com/pkmvspkm/game/GameView.kt`: drawing, Pokedex screen, and touch input
 - `app/src/main/java/com/pkmvspkm/game/SaveData.kt`: unlocked-level progress saved with SharedPreferences
