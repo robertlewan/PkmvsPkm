@@ -454,6 +454,7 @@ class GameView(context: Context) : View(context) {
         drawProjectiles(canvas, b)
         drawEnemyShots(canvas, b)
         drawSuns(canvas, b)
+        drawPickups(canvas, b)
         drawCardBar(canvas, b)
         drawHud(canvas, b)
         drawBanner(canvas, b)
@@ -481,7 +482,7 @@ class GameView(context: Context) : View(context) {
             Color.argb(alpha, 255, 255, 255), Paint.Align.CENTER)
     }
 
-    /** Event text (e.g. "Sableye stole 25 sun!") or the selected card's info, shown above the cards. */
+    /** Event text (e.g. "Sableye stole 25 rare candy!") or the selected card's info, shown above the cards. */
     private fun drawBanner(canvas: Canvas, b: Battle) {
         val fw = width.toFloat()
         val text = if (b.messageTimer > 0f) {
@@ -489,13 +490,13 @@ class GameView(context: Context) : View(context) {
         } else {
             selected?.info ?: return
         }
-        val size = fw * 0.04f
-        val lines = wrapText(text, fw * 0.85f, size)
+        val size = fw * 0.022f
+        val lines = wrapText(text, fw * 0.5f, size)
         val lineH = size * 1.3f
         val boxH = lines.size * lineH + size * 1.2f
         val cy = (gridBottom + cardTop) / 2f
 
-        rect.set(fw * 0.075f, cy - boxH / 2f, fw * 0.925f, cy + boxH / 2f)
+        rect.set(fw * 0.25f, cy - boxH / 2f, fw * 0.75f, cy + boxH / 2f)
         paint.style = Paint.Style.FILL
         paint.color = Color.argb(200, 20, 25, 45)
         canvas.drawRoundRect(rect, 24f, 24f, paint)
@@ -676,9 +677,32 @@ class GameView(context: Context) : View(context) {
         }
     }
 
+    /** Rare candy icon (the currency). Falls back to a yellow ball until the sprite loads. */
     private fun drawSunIcon(canvas: Canvas, cx: Float, cy: Float, r: Float) {
-        drawCircle(canvas, cx, cy, r, Color.rgb(255, 200, 60))
-        drawCircle(canvas, cx - r * 0.3f, cy - r * 0.3f, r * 0.3f, Color.rgb(255, 250, 210))
+        val candy = SpriteCache.getItem("rare-candy") { invalidate() }
+        if (candy != null) {
+            val s = r * 1.6f
+            rect.set(cx - s, cy - s, cx + s, cy + s)
+            spritePaint.colorFilter = null
+            canvas.drawBitmap(candy, null, rect, spritePaint)
+        } else {
+            drawCircle(canvas, cx, cy, r, Color.rgb(255, 200, 60))
+            drawCircle(canvas, cx - r * 0.3f, cy - r * 0.3f, r * 0.3f, Color.rgb(255, 250, 210))
+        }
+    }
+
+    /** Collected candy flying from the board up to the HUD counter. */
+    private fun drawPickups(canvas: Canvas, b: Battle) {
+        val targetX = width.toFloat() * 0.08f
+        val targetY = hudH * 0.5f
+        for (p in b.pickups) {
+            val fromX = gx(p.x)
+            val fromY = gy(p.y)
+            val t = p.progress * p.progress // speeds up as it nears the counter
+            val x = fromX + (targetX - fromX) * t
+            val y = fromY + (targetY - fromY) * t
+            drawSunIcon(canvas, x, y, cell * 0.24f * (1f - 0.5f * p.progress))
+        }
     }
 
     private fun drawCardBar(canvas: Canvas, b: Battle) {

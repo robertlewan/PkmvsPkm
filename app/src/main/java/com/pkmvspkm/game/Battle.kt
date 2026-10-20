@@ -15,6 +15,9 @@ private const val ENEMY_SHOT_SPEED = 2.5f // columns per second
 private const val FALL_SPEED = 1.2f       // rows per second
 private const val HIT_FLASH = 0.12f       // seconds
 private const val SPAWN_SLOWDOWN = 1.3f   // multiplies level spawn intervals; higher = fewer enemies
+private const val GAME_SPEED = 0.75f      // global speed of the battle; lower = slower movement, shots, and timers
+private const val SUN_HOVER_TIME = 0.5f   // seconds a candy waits on the ground before flying to the HUD
+private const val PICKUP_TIME = 0.6f      // seconds for a candy to fly from the board to the HUD
 private const val BURN_DPS = 8f           // damage per second while burning
 
 /** Anything the player can pick from the card bar. */
@@ -49,9 +52,9 @@ enum class DefenderType(
     val healPerSecond: Float = 0f,
     val healRange: Int = 0,
 ) : Card {
-    CHANSEY(
-        "Chansey", 50, 120f, 0xFFF48FB1.toInt(), 0f, 0f, 9f, 113,
-        "Lucky Egg: makes 25 sun every 9 seconds. Heals defenders within 2 columns in its row for 12 HP/s. Does not attack.",
+    FLOETTE(
+        "Floette", 50, 120f, 0xFFF48FB1.toInt(), 0f, 0f, 9f, 670,
+        "Flower Power: makes 25 rare candy every 9 seconds. Heals defenders within 2 columns in its row for 12 HP/s. Does not attack.",
         healPerSecond = 12f, healRange = 2,
     ),
     PIKACHU(
@@ -145,7 +148,7 @@ enum class EnemyType(
     ),
     SABLEYE(
         "Sableye", 320f, 0.35f, 40f, 0xFF8E24AA.toInt(), 302,
-        "Shadow Armor: takes 50% less damage from shots. Gem Thief: steals 25 sun from you every 10 seconds.",
+        "Shadow Armor: takes 50% less damage from shots. Gem Thief: steals 25 rare candy from you every 10 seconds.",
         armor = 0.5f, stealInterval = 10f, stealAmount = 25,
     ),
     WEAVILE(
@@ -202,8 +205,20 @@ class EnemyShot(val row: Int, var x: Float, val damage: Float) {
     var dead = false
 }
 
-/** A collectible sun. [fallTo] is the row it lands on, or null if it was dropped by a defender. */
-class Sun(var x: Float, var y: Float, val fallTo: Float?, var life: Float) {
+/**
+ * A rare candy drop on the board. [fallTo] is the row it lands on, or null if it was dropped by a defender.
+ * It is collected on its own after landing, so the player does not have to tap it.
+ */
+class Sun(var x: Float, var y: Float, val fallTo: Float?) {
+    var dead = false
+    /** Seconds spent on the ground before it is collected. */
+    var hover = 0f
+}
+
+/** Candy flying from the board to the HUD counter. The count goes up when it arrives. */
+class Pickup(val x: Float, val y: Float) {
+    /** 0 at the board, 1 at the HUD. */
+    var progress = 0f
     var dead = false
 }
 
@@ -215,6 +230,7 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
     val projectiles = mutableListOf<Projectile>()
     val enemyShots = mutableListOf<EnemyShot>()
     val suns = mutableListOf<Sun>()
+    val pickups = mutableListOf<Pickup>()
 
     /** One-use lane clearer per row (the lawnmower equivalent). */
     val trapReady = BooleanArray(ROWS) { true }
@@ -229,7 +245,7 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
     var legendTimer = 0f
         private set
 
-    /** Short event text shown in the battle banner, e.g. "Sableye stole 25 sun!". */
+    /** Short event text shown in the battle banner, e.g. "Sableye stole 25 rare candy!". */
     var message = ""
         private set
     var messageTimer = 0f
@@ -245,9 +261,12 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
     private var spawnTimer = 3f
     private var sunTimer = 3f
 
-    fun update(dt: Float) {
+    /** Advances the battle by [frameDt] real seconds, scaled by [GAME_SPEED] so everything runs a bit slower. */
+    fun update(frameDt: Float) {
         if (outcome != Outcome.RUNNING) return
+        val dt = frameDt * GAME_SPEED
         updateSuns(dt)
+        updatePickups(dt)
         updateDefenders(dt)
         updateProjectiles(dt)
         updateEnemyShots(dt)
@@ -264,6 +283,7 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
         projectiles.removeAll { it.dead }
         enemyShots.removeAll { it.dead }
         suns.removeAll { it.dead }
+        pickups.removeAll { it.dead }
 
         if (outcome == Outcome.RUNNING && spawnedCount >= level.count && enemies.isEmpty()) {
             outcome = Outcome.WON
@@ -274,10 +294,11 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
     fun sunAt(x: Float, y: Float): Sun? =
         suns.firstOrNull { !it.dead && abs(it.x - x) < 0.8f && abs(it.y - y) < 0.8f }
 
+    /** Taps a candy on the board to grab it early. */
     fun collect(s: Sun) {
         if (s.dead) return
         s.dead = true
-        sun += SUN_VALUE
+        pickups.add(Pickup(s.x, s.y))
     }
 
     /** True when the card can be used right now (enough sun, and not a spent legend). */
@@ -336,13 +357,29 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
         sunTimer -= dt
         if (sunTimer <= 0f) {
             sunTimer = 4.5f + rng.nextFloat() * 2f
-            suns.add(Sun(rng.nextInt(COLS) + 0.5f, -0.5f, rng.nextInt(ROWS) + 0.5f, 12f))
+            suns.add(Sun(rng.nextInt(COLS) + 0.5f, -0.5f, rng.nextInt(ROWS) + 0.5f))
         }
         for (s in suns) {
+            if (s.dead) continue
             val target = s.fallTo
             if (target != null && s.y < target) s.y = min(target, s.y + FALL_SPEED * dt)
-            s.life -= dt
-            if (s.life <= 0f) s.dead = true
+            // Once it has landed (or was dropped by a defender), it waits briefly and then flies to the HUD
+            if (target == null || s.y >= target) {
+                s.hover += dt
+                if (s.hover >= SUN_HOVER_TIME) collect(s)
+            }
+        }
+    }
+
+    private fun updatePickups(dt: Float) {
+        for (p in pickups) {
+            if (p.dead) continue
+            p.progress += dt / PICKUP_TIME
+            if (p.progress >= 1f) {
+                p.progress = 1f
+                p.dead = true
+                sun += SUN_VALUE
+            }
         }
     }
 
@@ -362,7 +399,7 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
 
             if (d.type.sunInterval > 0f && d.timer >= d.type.sunInterval) {
                 d.timer = 0f
-                suns.add(Sun(d.col + 0.5f, d.row + 0.5f, null, 12f))
+                suns.add(Sun(d.col + 0.5f, d.row + 0.5f, null))
             }
 
             val shooting = d.type.shotInterval > 0f && d.timer >= d.type.shotInterval
@@ -460,7 +497,7 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
                     e.timer = 0f
                     val stolen = min(sun, t.stealAmount)
                     sun -= stolen
-                    say("${t.label} stole $stolen sun!")
+                    say("${t.label} stole $stolen rare candy!")
                 }
             }
 
