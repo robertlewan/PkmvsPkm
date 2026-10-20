@@ -50,6 +50,7 @@ class GameView(context: Context) : View(context) {
 
     // Layout, computed in onSizeChanged
     private var hudH = 0f
+    private var houseLeft = 0f
     private var gridLeft = 0f
     private var gridTop = 0f
     private var gridRight = 0f
@@ -94,11 +95,14 @@ class GameView(context: Context) : View(context) {
         val fw = w.toFloat()
         val fh = h.toFloat()
 
+        // Landscape: size cells so the whole board fits both width and height, then center it
+        val houseCells = 0.8f // width of the house strip that holds the lane traps, in cells
         hudH = fh * 0.12f
-        gridLeft = fw * 0.1f // margin on the left holds the lane traps
-        cell = (fw - gridLeft - fw * 0.03f) / COLS
-        val cardH = fh * 0.13f
+        val cardH = fh * 0.16f
         cardTop = fh - cardH
+        cell = min(fw * 0.92f / (COLS + houseCells), fh * 0.68f / ROWS)
+        houseLeft = (fw - cell * (COLS + houseCells)) / 2f
+        gridLeft = houseLeft + cell * houseCells
         gridTop = hudH + (cardTop - hudH - cell * ROWS) / 2f
         gridRight = gridLeft + cell * COLS
         gridBottom = gridTop + cell * ROWS
@@ -516,10 +520,10 @@ class GameView(context: Context) : View(context) {
         // Brick wall of the house to the left of the lawn
         paint.style = Paint.Style.FILL
         paint.color = Color.rgb(150, 100, 70)
-        canvas.drawRect(0f, gridTop, gridLeft - 4f, gridBottom, paint)
+        canvas.drawRect(houseLeft, gridTop, gridLeft - 4f, gridBottom, paint)
         paint.color = Color.rgb(110, 70, 50)
         for (r in 0 until ROWS) {
-            canvas.drawRect(0f, gy(r + 1f) - 3f, gridLeft - 4f, gy(r + 1f), paint)
+            canvas.drawRect(houseLeft, gy(r + 1f) - 3f, gridLeft - 4f, gy(r + 1f), paint)
         }
     }
 
@@ -545,7 +549,7 @@ class GameView(context: Context) : View(context) {
     private fun drawTraps(canvas: Canvas, b: Battle) {
         val r = cell * 0.26f
         for (row in 0 until ROWS) {
-            val cx = (gridLeft - 4f) * 0.5f
+            val cx = houseLeft + cell * 0.4f
             val cy = gy(row + 0.5f)
             if (b.trapReady[row]) {
                 drawPokeBall(canvas, cx, cy, r * (1f + 0.04f * sin(time * 4f + row)))

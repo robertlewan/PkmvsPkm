@@ -14,6 +14,7 @@ private const val PROJECTILE_SPEED = 4f   // columns per second
 private const val ENEMY_SHOT_SPEED = 2.5f // columns per second
 private const val FALL_SPEED = 1.2f       // rows per second
 private const val HIT_FLASH = 0.12f       // seconds
+private const val SPAWN_SLOWDOWN = 1.3f   // multiplies level spawn intervals; higher = fewer enemies
 private const val BURN_DPS = 8f           // damage per second while burning
 
 /** Anything the player can pick from the card bar. */
@@ -510,6 +511,6 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
 
         // Waves get a little faster as the level goes on.
         val progress = spawnedCount.toFloat() / level.count
-        spawnTimer = level.interval * (0.75f + rng.nextFloat() * 0.5f) * (1f - 0.3f * progress)
+        spawnTimer = level.interval * SPAWN_SLOWDOWN * (0.75f + rng.nextFloat() * 0.5f) * (1f - 0.3f * progress)
     }
 }
