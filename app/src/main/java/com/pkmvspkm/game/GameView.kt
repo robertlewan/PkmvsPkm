@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.RadialGradient
@@ -107,16 +108,18 @@ class GameView(context: Context) : View(context) {
         gridRight = gridLeft + cell * COLS
         gridBottom = gridTop + cell * ROWS
 
-        val bw = fw * 0.8f
-        val bh = fh * 0.1f
-        val gap = fh * 0.025f
-        val startY = fh * 0.36f
+        // Route buttons in three columns, four rows, so all twelve stages fit on screen
+        val bw = fw * 0.28f
+        val bh = fh * 0.14f
+        val gap = fh * 0.02f
+        val startY = fh * 0.33f
+        val left0 = (fw - (3 * bw + 2 * gap)) / 2f
         levelButtons.forEachIndexed { i, r ->
-            val top = startY + i * (bh + gap)
-            r.set((fw - bw) / 2f, top, (fw + bw) / 2f, top + bh)
+            val left = left0 + (i % 3) * (bw + gap)
+            val top = startY + (i / 3) * (bh + gap)
+            r.set(left, top, left + bw, top + bh)
         }
-        val pokedexTop = startY + LEVELS.size * (bh + gap)
-        pokedexButton.set((fw - bw) / 2f, pokedexTop, (fw + bw) / 2f, pokedexTop + bh * 0.8f)
+        pokedexButton.set(fw * 0.8f, fh * 0.04f, fw * 0.95f, fh * 0.12f)
         backButton.set(fw * 0.04f, fh * 0.03f, fw * 0.3f, fh * 0.03f + fh * 0.07f)
         listTop = fh * 0.16f
     }
@@ -173,7 +176,7 @@ class GameView(context: Context) : View(context) {
             SaveData.unlockNext(appContext, b.level.id)
             unlocked = SaveData.unlockedLevel(appContext)
             resultText = "${b.level.name} cleared!"
-            resultSubText = if (b.level.id < LEVELS.size) "Next level unlocked" else "You beat Gengar!"
+            resultSubText = if (b.level.id < LEVELS.size) "Next route unlocked" else "You conquered Kanto!"
         } else {
             resultText = "The dark Pokemon got through!"
             resultSubText = "Try again from the menu"
@@ -266,14 +269,14 @@ class GameView(context: Context) : View(context) {
 
             if (open) {
                 val subtitle = if (lvl.bossAtEnd) "${lvl.count} enemies  •  Boss: Gengar" else "${lvl.count} enemies"
-                drawText(canvas, "${lvl.id}. ${lvl.name}", r.left + fw * 0.05f, r.centerY() - bh * 0.05f,
-                    fw * 0.05f, Color.WHITE, Paint.Align.LEFT)
-                drawText(canvas, subtitle, r.left + fw * 0.05f, r.centerY() + bh * 0.3f,
-                    fw * 0.03f, Color.rgb(230, 255, 230), Paint.Align.LEFT)
-                // Preview the enemies of this level on the right
-                lvl.pool.take(3).forEachIndexed { j, et ->
-                    val size = bh * 0.75f
-                    val cx = r.right - fw * 0.07f - j * size * 0.8f
+                drawText(canvas, "${lvl.id}. ${lvl.name}", r.left + fw * 0.02f, r.centerY() - bh * 0.08f,
+                    fw * 0.035f, Color.WHITE, Paint.Align.LEFT)
+                drawText(canvas, subtitle, r.left + fw * 0.02f, r.centerY() + bh * 0.3f,
+                    fw * 0.024f, Color.rgb(230, 255, 230), Paint.Align.LEFT)
+                // Preview two of this stage's Pokemon on the right
+                lvl.pool.take(2).forEachIndexed { j, et ->
+                    val size = bh * 0.6f
+                    val cx = r.right - size / 2f - fw * 0.01f - j * size * 0.9f
                     drawSprite(canvas, et.spriteId, cx, r.centerY(), size)
                 }
             } else {
@@ -420,10 +423,10 @@ class GameView(context: Context) : View(context) {
         val fh = height.toFloat()
 
         // Sky
-        fillGradient(canvas, 0f, 0f, fw, fh, Color.rgb(90, 160, 230), Color.rgb(170, 220, 250))
+        drawBackdrop(canvas, b.level.theme)
 
         drawHouse(canvas)
-        drawLawn(canvas)
+        drawLawn(canvas, b.level.theme)
         drawTraps(canvas, b)
 
         for (d in b.defenders) {
@@ -517,6 +520,167 @@ class GameView(context: Context) : View(context) {
         }
     }
 
+    // ---------- Backdrops ----------
+
+    /** Scenery behind the board, drawn with simple shapes so no image files are needed. */
+    private fun drawBackdrop(canvas: Canvas, theme: Theme) {
+        val fw = width.toFloat()
+        val fh = height.toFloat()
+        fillGradient(canvas, 0f, 0f, fw, fh, theme.skyTop, theme.skyBottom)
+        when (theme) {
+            Theme.FOREST -> drawForest(canvas, fw, fh)
+            Theme.CAVE -> drawCave(canvas, fw, fh)
+            Theme.PLAIN -> drawPlain(canvas, fw, fh)
+            Theme.FACTORY -> drawFactory(canvas, fw, fh)
+            Theme.TOWER -> drawTower(canvas, fw, fh)
+            Theme.SEA -> drawSea(canvas, fw, fh)
+            Theme.VOLCANO -> drawVolcano(canvas, fw, fh)
+            Theme.MOUNTAIN -> drawMountains(canvas, fw, fh, Color.rgb(70, 80, 100), Color.rgb(230, 235, 245))
+            Theme.PLATEAU -> {
+                drawClouds(canvas, fw, fh)
+                drawMountains(canvas, fw, fh, Color.rgb(90, 130, 80), Color.rgb(245, 250, 255))
+            }
+        }
+    }
+
+    /** Solid polygon from a flat list of x, y pairs. */
+    private fun polygon(canvas: Canvas, color: Int, vararg pts: Float) {
+        paint.style = Paint.Style.FILL
+        paint.shader = null
+        paint.color = color
+        val path = Path()
+        path.moveTo(pts[0], pts[1])
+        var i = 2
+        while (i < pts.size) {
+            path.lineTo(pts[i], pts[i + 1])
+            i += 2
+        }
+        path.close()
+        canvas.drawPath(path, paint)
+    }
+
+    private fun oval(canvas: Canvas, color: Int, left: Float, top: Float, right: Float, bottom: Float) {
+        paint.style = Paint.Style.FILL
+        paint.shader = null
+        paint.color = color
+        rect.set(left, top, right, bottom)
+        canvas.drawOval(rect, paint)
+    }
+
+    private fun drawForest(canvas: Canvas, fw: Float, fh: Float) {
+        for (i in 0..8) {
+            val x = fw * i / 8f
+            val w = fw * 0.08f
+            polygon(canvas, Color.rgb(30, 95, 45), x - w, 0f, x + w, 0f, x, fh * (0.14f + 0.04f * (i % 3)))
+            polygon(canvas, Color.rgb(35, 105, 50), x - w, fh, x + w, fh, x, fh * (0.86f - 0.04f * (i % 2)))
+        }
+    }
+
+    private fun drawCave(canvas: Canvas, fw: Float, fh: Float) {
+        for (i in 0..10) {
+            val x = fw * i / 10f
+            val w = fw * 0.04f
+            polygon(canvas, Color.rgb(50, 46, 56), x - w, 0f, x + w, 0f, x, fh * (0.12f + 0.06f * (i % 3)))
+            polygon(canvas, Color.rgb(95, 88, 84), x - w, fh, x + w, fh, x, fh * (0.9f - 0.05f * (i % 2)))
+        }
+    }
+
+    private fun drawPlain(canvas: Canvas, fw: Float, fh: Float) {
+        oval(canvas, Color.rgb(255, 225, 90), fw * 0.84f, fh * 0.06f, fw * 0.94f, fh * 0.2f)
+        oval(canvas, Color.rgb(100, 170, 80), -fw * 0.2f, fh * 0.78f, fw * 0.6f, fh * 1.3f)
+        oval(canvas, Color.rgb(85, 150, 70), fw * 0.4f, fh * 0.82f, fw * 1.2f, fh * 1.4f)
+    }
+
+    private fun drawFactory(canvas: Canvas, fw: Float, fh: Float) {
+        for (i in 0..5) {
+            val x = fw * (0.05f + i * 0.18f)
+            paint.style = Paint.Style.FILL
+            paint.shader = null
+            paint.color = Color.rgb(70, 74, 84)
+            rect.set(x, 0f, x + fw * 0.035f, fh * 0.22f)
+            canvas.drawRect(rect, paint)
+            paint.color = Color.argb(120, 200, 200, 210)
+            canvas.drawCircle(x + fw * 0.02f, fh * (0.1f + 0.02f * i), fh * 0.05f, paint)
+        }
+        // Yellow and black hazard stripe near the bottom
+        paint.color = Color.rgb(240, 200, 40)
+        canvas.drawRect(0f, fh * 0.93f, fw, fh, paint)
+    }
+
+    private fun drawTower(canvas: Canvas, fw: Float, fh: Float) {
+        for (i in 0..30) {
+            paint.style = Paint.Style.FILL
+            paint.color = Color.argb(180, 255, 255, 255)
+            canvas.drawCircle(fw * ((i * 37) % 100) / 100f, fh * ((i * 53) % 90) / 100f, 2f + (i % 3), paint)
+        }
+        // Stacked tower with a pointed roof, centered behind the grid's right side
+        val cx = fw * 0.9f
+        for (layer in 0..4) {
+            val w = fw * (0.07f - layer * 0.01f)
+            val top = fh * (0.9f - 0.13f * (layer + 1))
+            val bottom = fh * (0.9f - 0.13f * layer)
+            paint.color = Color.rgb(40, 28, 60)
+            rect.set(cx - w, top, cx + w, bottom)
+            canvas.drawRect(rect, paint)
+        }
+        polygon(canvas, Color.rgb(40, 28, 60), cx - fw * 0.04f, fh * 0.25f, cx + fw * 0.04f, fh * 0.25f, cx, fh * 0.12f)
+    }
+
+    private fun drawSea(canvas: Canvas, fw: Float, fh: Float) {
+        // Wave lines across the lower half
+        paint.style = Paint.Style.STROKE
+        paint.shader = null
+        paint.strokeWidth = fh * 0.008f
+        paint.color = Color.argb(120, 220, 245, 255)
+        for (row in 0..6) {
+            val y = fh * (0.4f + 0.09f * row)
+            val path = Path()
+            path.moveTo(0f, y)
+            var x = 0f
+            var up = true
+            while (x < fw) {
+                path.quadTo(x + fw * 0.03f, y + (if (up) -1f else 1f) * fh * 0.015f, x + fw * 0.06f, y)
+                x += fw * 0.06f
+                up = !up
+            }
+            canvas.drawPath(path, paint)
+        }
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun drawVolcano(canvas: Canvas, fw: Float, fh: Float) {
+        // Smoke puffs above the crater
+        for (i in 0..4) {
+            paint.style = Paint.Style.FILL
+            paint.color = Color.argb(90, 80, 70, 70)
+            canvas.drawCircle(fw * (0.3f + i * 0.1f), fh * (0.06f + 0.03f * (i % 2)), fh * 0.06f, paint)
+        }
+        polygon(canvas, Color.rgb(60, 36, 32), fw * 0.15f, fh, fw * 0.85f, fh, fw * 0.5f, fh * 0.3f)
+        // Lava glow in the crater
+        paint.style = Paint.Style.FILL
+        paint.shader = RadialGradient(fw * 0.5f, fh * 0.3f, fh * 0.08f,
+            Color.argb(230, 255, 140, 40), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+        canvas.drawCircle(fw * 0.5f, fh * 0.3f, fh * 0.08f, paint)
+        paint.shader = null
+    }
+
+    private fun drawMountains(canvas: Canvas, fw: Float, fh: Float, rock: Int, snow: Int) {
+        for (i in 0..4) {
+            val px = fw * (i * 0.25f)
+            val peakY = fh * (0.15f + 0.05f * (i % 2))
+            polygon(canvas, rock, px - fw * 0.18f, fh, px + fw * 0.18f, fh, px, peakY)
+            polygon(canvas, snow, px - fw * 0.05f, peakY + fh * 0.06f, px + fw * 0.05f, peakY + fh * 0.06f, px, peakY)
+        }
+    }
+
+    private fun drawClouds(canvas: Canvas, fw: Float, fh: Float) {
+        for (i in 0..4) {
+            val x = fw * (0.1f + i * 0.22f)
+            val y = fh * (0.1f + 0.08f * (i % 2))
+            oval(canvas, Color.argb(220, 255, 255, 255), x, y, x + fw * 0.12f, y + fh * 0.05f)
+        }
+    }
+
     private fun drawHouse(canvas: Canvas) {
         // Brick wall of the house to the left of the lawn
         paint.style = Paint.Style.FILL
@@ -528,12 +692,12 @@ class GameView(context: Context) : View(context) {
         }
     }
 
-    private fun drawLawn(canvas: Canvas) {
+    private fun drawLawn(canvas: Canvas, theme: Theme) {
         paint.style = Paint.Style.FILL
         for (r in 0 until ROWS) for (c in 0 until COLS) {
             val left = gx(c.toFloat())
             val top = gy(r.toFloat())
-            paint.color = if ((r + c) % 2 == 0) Color.rgb(124, 189, 90) else Color.rgb(108, 170, 78)
+            paint.color = if ((r + c) % 2 == 0) theme.tileA else theme.tileB
             canvas.drawRect(left, top, left + cell, top + cell, paint)
             // Soft highlight along the top edge of each tile
             paint.color = Color.argb(35, 255, 255, 255)
@@ -673,12 +837,18 @@ class GameView(context: Context) : View(context) {
             paint.shader = RadialGradient(px, py, cell * 0.55f, Color.argb(160, 255, 220, 80), Color.TRANSPARENT, Shader.TileMode.CLAMP)
             canvas.drawCircle(px, py, cell * 0.55f, paint)
             paint.shader = null
-            drawSunIcon(canvas, px, py, cell * 0.24f * pulse)
+            drawCandy(canvas, px, py, cell * 0.24f * pulse)
         }
     }
 
-    /** Rare candy icon (the currency). Falls back to a yellow ball until the sprite loads. */
+    /** Sunlight icon, the currency shown in the HUD and on card costs. */
     private fun drawSunIcon(canvas: Canvas, cx: Float, cy: Float, r: Float) {
+        drawCircle(canvas, cx, cy, r, Color.rgb(255, 200, 60))
+        drawCircle(canvas, cx - r * 0.3f, cy - r * 0.3f, r * 0.3f, Color.rgb(255, 250, 210))
+    }
+
+    /** Collectible drop, drawn as a Rare Candy. Falls back to the sun icon until the sprite loads. */
+    private fun drawCandy(canvas: Canvas, cx: Float, cy: Float, r: Float) {
         val candy = SpriteCache.getItem("rare-candy") { invalidate() }
         if (candy != null) {
             val s = r * 1.6f
@@ -686,8 +856,7 @@ class GameView(context: Context) : View(context) {
             spritePaint.colorFilter = null
             canvas.drawBitmap(candy, null, rect, spritePaint)
         } else {
-            drawCircle(canvas, cx, cy, r, Color.rgb(255, 200, 60))
-            drawCircle(canvas, cx - r * 0.3f, cy - r * 0.3f, r * 0.3f, Color.rgb(255, 250, 210))
+            drawSunIcon(canvas, cx, cy, r)
         }
     }
 
@@ -701,7 +870,7 @@ class GameView(context: Context) : View(context) {
             val t = p.progress * p.progress // speeds up as it nears the counter
             val x = fromX + (targetX - fromX) * t
             val y = fromY + (targetY - fromY) * t
-            drawSunIcon(canvas, x, y, cell * 0.24f * (1f - 0.5f * p.progress))
+            drawCandy(canvas, x, y, cell * 0.24f * (1f - 0.5f * p.progress))
         }
     }
 

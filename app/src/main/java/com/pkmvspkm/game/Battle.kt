@@ -54,7 +54,7 @@ enum class DefenderType(
 ) : Card {
     FLOETTE(
         "Floette", 50, 120f, 0xFFF48FB1.toInt(), 0f, 0f, 9f, 670,
-        "Flower Power: makes 25 rare candy every 9 seconds. Heals defenders within 2 columns in its row for 12 HP/s. Does not attack.",
+        "Flower Power: makes 25 sun every 9 seconds. Heals defenders within 2 columns in its row for 12 HP/s. Does not attack.",
         healPerSecond = 12f, healRange = 2,
     ),
     PIKACHU(
@@ -135,6 +135,8 @@ enum class EnemyType(
     /** Seconds between ranged shadow balls. 0 = melee only. */
     val rangedInterval: Float = 0f,
     val rangedDamage: Float = 0f,
+    /** Explodes on the first defender it reaches (dealing [burst] damage) and is removed. */
+    val kamikaze: Boolean = false,
 ) {
     ZUBAT(
         "Zubat", 100f, 0.7f, 20f, 0xFF7E57C2.toInt(), 41,
@@ -148,13 +150,115 @@ enum class EnemyType(
     ),
     SABLEYE(
         "Sableye", 320f, 0.35f, 40f, 0xFF8E24AA.toInt(), 302,
-        "Shadow Armor: takes 50% less damage from shots. Gem Thief: steals 25 rare candy from you every 10 seconds.",
+        "Shadow Armor: takes 50% less damage from shots. Gem Thief: steals 25 sun from you every 10 seconds.",
         armor = 0.5f, stealInterval = 10f, stealAmount = 25,
     ),
     WEAVILE(
         "Weavile", 260f, 0.9f, 35f, 0xFF1565C0.toInt(), 461,
         "Night Slash: the first time it reaches each defender it slashes for 45 extra damage. Very fast.",
         burst = 45f,
+    ),
+    RATTATA(
+        "Rattata", 70f, 0.9f, 12f, 0xFF8D6E63.toInt(), 19,
+        "Quick Bite: fast and weak, and it always comes in packs.",
+    ),
+    NIDORAN(
+        "Nidoran", 130f, 0.6f, 18f, 0xFF7E57C2.toInt(), 29,
+        "Horn Attack: the first time it reaches each defender it jabs for 15 extra damage.",
+        burst = 15f,
+    ),
+    RHYHORN(
+        "Rhyhorn", 320f, 0.4f, 35f, 0xFF90A4AE.toInt(), 111,
+        "Rock Charge: charges into the first defender it reaches for 40 extra damage. Very tough.",
+        burst = 40f,
+    ),
+    VOLTORB(
+        "Voltorb", 60f, 1.0f, 0f, 0xFFE53935.toInt(), 100,
+        "Self-Destruct: explodes on the first defender it reaches for 150 damage, then disappears.",
+        burst = 150f, kamikaze = true,
+    ),
+    MAGNEMITE(
+        "Magnemite", 110f, 0.55f, 12f, 0xFF78909C.toInt(), 81,
+        "Magnet Pull: flies over defenders and takes 20% less damage from shots.",
+        flies = true, armor = 0.2f,
+    ),
+    TENTACOOL(
+        "Tentacool", 130f, 0.5f, 15f, 0xFF4DD0E1.toInt(), 72,
+        "Jellyfish: heals a third of the damage it bites, so it is hard to finish.",
+        lifesteal = 0.33f,
+    ),
+    SEEL(
+        "Seel", 220f, 0.35f, 20f, 0xFFB3E5FC.toInt(), 86,
+        "Thick Fat: takes 20% less damage from shots. Slow but durable.",
+        armor = 0.2f,
+    ),
+    GROWLITHE(
+        "Growlithe", 110f, 0.9f, 25f, 0xFFFF7043.toInt(), 58,
+        "Flame Fang: the first bite on each defender deals 15 extra fire damage.",
+        burst = 15f,
+    ),
+    MAGMAR(
+        "Magmar", 260f, 0.5f, 30f, 0xFFE64A19.toInt(), 126,
+        "Fire Blast: fires a 35-damage fireball every 6 seconds at defenders in its lane.",
+        rangedInterval = 6f, rangedDamage = 35f,
+    ),
+    CATERPIE(
+        "Caterpie", 60f, 0.8f, 10f, 0xFF8BC34A.toInt(), 10,
+        "Fast little bug that arrives in swarms. Weak on its own, but a crowd adds up.",
+    ),
+    WEEDLE(
+        "Weedle", 80f, 0.75f, 14f, 0xFFFFB74D.toInt(), 13,
+        "Poison Sting: its bites hurt more than most bugs, at 14 damage per second.",
+    ),
+    KAKUNA(
+        "Kakuna", 200f, 0.15f, 15f, 0xFFFFE082.toInt(), 14,
+        "Harden: takes 40% less damage from shots. Very slow, but hard to take down.",
+        armor = 0.4f,
+    ),
+    BEEDRILL(
+        "Beedrill", 150f, 0.95f, 30f, 0xFFFBC02D.toInt(), 15,
+        "Twineedle: the fastest bug. Stabs a defender hard the first time it reaches it.",
+        burst = 30f,
+    ),
+    GEODUDE(
+        "Geodude", 240f, 0.3f, 25f, 0xFFA1887F.toInt(), 74,
+        "Rock Head: takes 25% less damage from shots. Slow and sturdy.",
+        armor = 0.25f,
+    ),
+    GRAVELER(
+        "Graveler", 380f, 0.22f, 35f, 0xFF8D6E63.toInt(), 75,
+        "Rolling Rock: very tough, takes 30% less damage, and bites hard when it reaches a defender.",
+        armor = 0.3f,
+    ),
+    ONIX(
+        "Onix", 500f, 0.2f, 40f, 0xFFBCAAA4.toInt(), 95,
+        "Rock Throw: hurls a 30-damage rock at defenders in its lane every 5 seconds. Huge and slow.",
+        rangedInterval = 5f, rangedDamage = 30f,
+    ),
+    DIGLETT(
+        "Diglett", 70f, 1.0f, 15f, 0xFF795548.toInt(), 50,
+        "Dig: burrows underground and passes under defenders without stopping. Very fast.",
+        flies = true,
+    ),
+    DUGTRIO(
+        "Dugtrio", 300f, 0.5f, 40f, 0xFF5D4037.toInt(), 51,
+        "Triple Attack: hits three times when it reaches a defender. Digs under walls like Diglett.",
+        flies = true, burst = 20f,
+    ),
+    GOLBAT(
+        "Golbat", 170f, 0.75f, 25f, 0xFF6A1B9A.toInt(), 42,
+        "Leech Life and flight: flies over defenders and heals for half the damage it bites.",
+        flies = true, lifesteal = 0.5f,
+    ),
+    GASTLY(
+        "Gastly", 90f, 0.5f, 15f, 0xFF4E342E.toInt(), 92,
+        "Gaseous: floats over defenders without stopping. Fragile, but hard to hit in time.",
+        flies = true,
+    ),
+    HAUNTER(
+        "Haunter", 180f, 0.45f, 25f, 0xFF5E35B1.toInt(), 93,
+        "Shadow Ball: flies over defenders and fires a 25-damage shadow ball every 5 seconds.",
+        flies = true, rangedInterval = 5f, rangedDamage = 25f,
     ),
     GENGAR(
         "Gengar", 1200f, 0.22f, 90f, 0xFF4A148C.toInt(), 94,
@@ -206,7 +310,7 @@ class EnemyShot(val row: Int, var x: Float, val damage: Float) {
 }
 
 /**
- * A rare candy drop on the board. [fallTo] is the row it lands on, or null if it was dropped by a defender.
+ * A sun drop on the board, drawn as a rare candy. [fallTo] is the row it lands on, or null if it was dropped by a defender.
  * It is collected on its own after landing, so the player does not have to tap it.
  */
 class Sun(var x: Float, var y: Float, val fallTo: Float?) {
@@ -245,7 +349,7 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
     var legendTimer = 0f
         private set
 
-    /** Short event text shown in the battle banner, e.g. "Sableye stole 25 rare candy!". */
+    /** Short event text shown in the battle banner, e.g. "Sableye stole 25 sun!". */
     var message = ""
         private set
     var messageTimer = 0f
@@ -388,7 +492,7 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
             if (d.dead) continue
             d.timer += dt
 
-            // Healing (Chansey, Snorlax)
+            // Healing (Floette, Snorlax)
             if (d.type.healPerSecond > 0f) {
                 for (ally in defenders) {
                     if (!ally.dead && ally.row == d.row && abs(ally.col - d.col) <= d.type.healRange) {
@@ -497,7 +601,7 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
                     e.timer = 0f
                     val stolen = min(sun, t.stealAmount)
                     sun -= stolen
-                    say("${t.label} stole $stolen rare candy!")
+                    say("${t.label} stole $stolen sun!")
                 }
             }
 
@@ -519,6 +623,13 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
             val col = floor(e.x).toInt()
             val blocker = defenders.firstOrNull { !it.dead && it.row == e.row && it.col == col }
             if (blocker != null) {
+                if (t.kamikaze) {
+                    blocker.hp -= t.burst
+                    blocker.hitFlash = HIT_FLASH
+                    if (blocker.hp <= 0f) blocker.dead = true
+                    e.dead = true
+                    continue
+                }
                 val bite = t.dps * dt
                 var damage = bite
                 if (!e.pounced) {
