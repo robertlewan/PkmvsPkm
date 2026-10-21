@@ -26,6 +26,8 @@ class LevelDef(
     /** When true, the last enemy spawned is Gengar. */
     val bossAtEnd: Boolean,
     val theme: Theme,
+    /** Pokemon recruited the first time this stage is cleared. */
+    val recruits: List<DefenderType>,
 )
 
 /** The Kanto route, in order. Clearing one stage unlocks the next. */
@@ -39,6 +41,7 @@ val LEVELS = listOf(
         startSun = 200,
         bossAtEnd = false,
         theme = Theme.FOREST,
+        recruits = listOf(DefenderType.CATERPIE, DefenderType.WEEDLE, DefenderType.BEEDRILL),
     ),
     LevelDef(
         id = 2,
@@ -49,6 +52,7 @@ val LEVELS = listOf(
         startSun = 200,
         bossAtEnd = false,
         theme = Theme.CAVE,
+        recruits = listOf(DefenderType.ZUBAT, DefenderType.GEODUDE),
     ),
     LevelDef(
         id = 3,
@@ -59,6 +63,7 @@ val LEVELS = listOf(
         startSun = 200,
         bossAtEnd = false,
         theme = Theme.CAVE,
+        recruits = listOf(DefenderType.DIGLETT),
     ),
     LevelDef(
         id = 4,
@@ -69,6 +74,7 @@ val LEVELS = listOf(
         startSun = 200,
         bossAtEnd = false,
         theme = Theme.PLAIN,
+        recruits = listOf(DefenderType.RATTATA, DefenderType.NIDORAN, DefenderType.SNORLAX),
     ),
     LevelDef(
         id = 5,
@@ -79,6 +85,7 @@ val LEVELS = listOf(
         startSun = 200,
         bossAtEnd = false,
         theme = Theme.FACTORY,
+        recruits = listOf(DefenderType.VOLTORB, DefenderType.MAGNEMITE),
     ),
     LevelDef(
         id = 6,
@@ -89,6 +96,7 @@ val LEVELS = listOf(
         startSun = 200,
         bossAtEnd = false,
         theme = Theme.CAVE,
+        recruits = listOf(DefenderType.ONIX),
     ),
     LevelDef(
         id = 7,
@@ -99,6 +107,7 @@ val LEVELS = listOf(
         startSun = 200,
         bossAtEnd = false,
         theme = Theme.PLAIN,
+        recruits = listOf(DefenderType.RHYHORN, DefenderType.FLORETTE),
     ),
     LevelDef(
         id = 8,
@@ -109,6 +118,7 @@ val LEVELS = listOf(
         startSun = 200,
         bossAtEnd = false,
         theme = Theme.SEA,
+        recruits = listOf(DefenderType.TENTACOOL, DefenderType.SEEL),
     ),
     LevelDef(
         id = 9,
@@ -119,6 +129,7 @@ val LEVELS = listOf(
         startSun = 200,
         bossAtEnd = false,
         theme = Theme.TOWER,
+        recruits = listOf(DefenderType.GASTLY, DefenderType.SABLEYE),
     ),
     LevelDef(
         id = 10,
@@ -129,6 +140,7 @@ val LEVELS = listOf(
         startSun = 200,
         bossAtEnd = false,
         theme = Theme.VOLCANO,
+        recruits = listOf(DefenderType.GROWLITHE, DefenderType.MAGMAR),
     ),
     LevelDef(
         id = 11,
@@ -139,6 +151,7 @@ val LEVELS = listOf(
         startSun = 200,
         bossAtEnd = false,
         theme = Theme.MOUNTAIN,
+        recruits = listOf(DefenderType.MURKROW, DefenderType.WEAVILE),
     ),
     LevelDef(
         id = 12,
@@ -149,5 +162,6 @@ val LEVELS = listOf(
         startSun = 200,
         bossAtEnd = true,
         theme = Theme.PLATEAU,
+        recruits = emptyList(),
     ),
 )

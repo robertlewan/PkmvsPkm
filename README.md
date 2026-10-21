@@ -24,4 +24,5 @@ The sprites are Nintendo / Game Freak artwork. This is fine for personal use, bu
 - `app/src/main/java/com/pkmvspkm/game/Battle.kt`: game rules, enemies, defenders, sun, and trap logic (no Android code)
 - `app/src/main/java/com/pkmvspkm/game/Levels.kt`: level definitions (enemy pool, count, spacing)
 - `app/src/main/java/com/pkmvspkm/game/GameView.kt`: drawing, Pokedex screen, and touch input
-- `app/src/main/java/com/pkmvspkm/game/SaveData.kt`: unlocked-level progress saved with SharedPreferences
+- `app/src/main/java/com/pkmvspkm/game/Defenders.kt`: every Pokemon you can place, evolutions, and the upgrade math
+- `app/src/main/java/com/pkmvspkm/game/Progress.kt`: stars, stage ratings, roster, upgrades, and saving (SharedPreferences)

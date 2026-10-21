@@ -10,103 +10,15 @@ import kotlin.random.Random
 const val ROWS = 5
 const val COLS = 9
 const val SUN_VALUE = 25
-private const val PROJECTILE_SPEED = 4f   // columns per second
 private const val ENEMY_SHOT_SPEED = 2.5f // columns per second
 private const val FALL_SPEED = 1.2f       // rows per second
 private const val HIT_FLASH = 0.12f       // seconds
-private const val SPAWN_SLOWDOWN = 1.3f   // multiplies level spawn intervals; higher = fewer enemies
-private const val GAME_SPEED = 0.75f      // global speed of the battle; lower = slower movement, shots, and timers
-private const val SUN_HOVER_TIME = 0.5f   // seconds a candy waits on the ground before flying to the HUD
-private const val PICKUP_TIME = 0.6f      // seconds for a candy to fly from the board to the HUD
 private const val BURN_DPS = 8f           // damage per second while burning
-
-/** Anything the player can pick from the card bar. */
-interface Card {
-    val label: String
-    val cost: Int
-    val spriteId: Int
-    val info: String
-}
-
-/** Status effect a shot applies to the enemy it hits. */
-enum class ShotEffect { NONE, BURN, SLOW }
-
-enum class DefenderType(
-    override val label: String,
-    override val cost: Int,
-    val hp: Float,
-    val color: Int,
-    /** Seconds between shots. 0 = does not shoot. */
-    val shotInterval: Float,
-    val damage: Float,
-    /** Seconds between sun drops. 0 = does not produce sun. */
-    val sunInterval: Float,
-    /** National Pokedex number, used to load the official sprite. */
-    override val spriteId: Int,
-    /** Shown in the Pokedex and in the battle banner when the card is selected. */
-    override val info: String,
-    val shotEffect: ShotEffect = ShotEffect.NONE,
-    /** Extra enemies each shot can pass through. */
-    val pierce: Int = 0,
-    /** HP per second healed to defenders within [healRange] columns in the same row, itself included. */
-    val healPerSecond: Float = 0f,
-    val healRange: Int = 0,
-) : Card {
-    FLOETTE(
-        "Floette", 50, 120f, 0xFFF48FB1.toInt(), 0f, 0f, 9f, 670,
-        "Flower Power: makes 25 sun every 9 seconds. Heals defenders within 2 columns in its row for 12 HP/s. Does not attack.",
-        healPerSecond = 12f, healRange = 2,
-    ),
-    PIKACHU(
-        "Pikachu", 100, 150f, 0xFFFDD835.toInt(), 1.4f, 20f, 0f, 25,
-        "Thunder Chain: 20-damage shots pierce through one extra enemy in the row.",
-        pierce = 1,
-    ),
-    CHARMANDER(
-        "Charmander", 125, 150f, 0xFFFF7043.toInt(), 1.8f, 30f, 0f, 4,
-        "Ember: 30-damage shots set the enemy on fire, dealing 8 damage per second for 3 seconds.",
-        shotEffect = ShotEffect.BURN,
-    ),
-    SQUIRTLE(
-        "Squirtle", 75, 150f, 0xFF4FC3F7.toInt(), 1.6f, 15f, 0f, 7,
-        "Water Gun: 15-damage shots halve the enemy's speed for 2 seconds. Cheap, and great against fast enemies.",
-        shotEffect = ShotEffect.SLOW,
-    ),
-    SNORLAX(
-        "Snorlax", 150, 900f, 0xFF607D8B.toInt(), 0f, 0f, 0f, 143,
-        "Thick Fat and Rest: 900 HP, regenerates 10 HP/s, and blocks enemies to protect the shooters behind it.",
-        healPerSecond = 10f, healRange = 0,
-    ),
-}
-
-/** One-use legendary helpers. Tapping the card casts the ability on the board. */
-enum class LegendType(
-    override val label: String,
-    override val cost: Int,
-    override val spriteId: Int,
-    override val info: String,
-    /** Screen tint shown when the ability fires. */
-    val tint: Int,
-) : Card {
-    ARTICUNO(
-        "Articuno", 250, 144,
-        "Legendary, one use per battle. Blizzard freezes every enemy on the board for 5 seconds. Frozen enemies cannot move, bite, or attack.",
-        0xFF7FD8FF.toInt(),
-    ),
-    HO_OH(
-        "Ho-Oh", 300, 250,
-        "Legendary, one use per battle. Sacred Fire deals 150 damage to every enemy on the board.",
-        0xFFFFC107.toInt(),
-    ),
-    MEWTWO(
-        "Mewtwo", 350, 150,
-        "Legendary, one use per battle. Psystrike deals 500 damage to the strongest enemy on the board.",
-        0xFFFF6FB5.toInt(),
-    ),
-}
-
-/** Cards shown in the card bar: defenders first, then legendary helpers. */
-val ALL_CARDS: List<Card> = listOf(*DefenderType.entries.toTypedArray(), *LegendType.entries.toTypedArray())
+private const val POISON_DPS = 5f         // damage per second while poisoned
+private const val SUN_HOVER_TIME = 0.5f   // seconds a drop waits on the ground before flying up
+private const val PICKUP_TIME = 0.6f      // seconds for a drop to fly from the board to the HUD
+private const val SPAWN_SLOWDOWN = 1.3f   // multiplies level spawn intervals; higher = fewer enemies
+private const val GAME_SPEED = 0.75f      // global speed of the battle; lower = slower
 
 enum class EnemyType(
     val label: String,
@@ -132,7 +44,7 @@ enum class EnemyType(
     /** Seconds between sun thefts. 0 = never steals. */
     val stealInterval: Float = 0f,
     val stealAmount: Int = 0,
-    /** Seconds between ranged shadow balls. 0 = melee only. */
+    /** Seconds between ranged shots. 0 = melee only. */
     val rangedInterval: Float = 0f,
     val rangedDamage: Float = 0f,
     /** Explodes on the first defender it reaches (dealing [burst] damage) and is removed. */
@@ -267,8 +179,8 @@ enum class EnemyType(
     ),
 }
 
-class Defender(val type: DefenderType, val row: Int, val col: Int) {
-    var hp = type.hp
+class Defender(val type: DefenderType, val row: Int, val col: Int, val stats: DefStats) {
+    var hp = stats.maxHp
     var timer = 0f
     var dead = false
     /** Seconds left on the white hit flash when this defender takes damage. */
@@ -283,21 +195,24 @@ class Enemy(val type: EnemyType, val row: Int, var x: Float) {
     var timer = 0f
     /** True once the enemy has used its first-contact burst. */
     var pounced = false
-    /** Seconds left frozen by Articuno. Frozen enemies do nothing. */
-    var freezeTimer = 0f
-    /** Seconds left at half speed (Squirtle). */
+    /** Seconds left at half speed (slowed by Squirtle and friends). */
     var slowTimer = 0f
-    /** Seconds left burning (Charmander). */
+    /** Seconds left burning. */
     var burnTimer = 0f
+    /** Seconds left poisoned. */
+    var poisonTimer = 0f
 }
 
 class Projectile(
     val row: Int,
     var x: Float,
     val damage: Float,
-    val effect: ShotEffect = ShotEffect.NONE,
+    val shot: ShotType,
+    val effect: ShotEffect,
     /** Extra enemies this shot can pass through. */
-    var pierce: Int = 0,
+    var pierce: Int,
+    /** Columns per second. */
+    val speed: Float,
 ) {
     var dead = false
     /** Enemies already hit by this shot, so a piercing shot never hits one twice. */
@@ -310,17 +225,19 @@ class EnemyShot(val row: Int, var x: Float, val damage: Float) {
 }
 
 /**
- * A sun drop on the board, drawn as a rare candy. [fallTo] is the row it lands on, or null if it was dropped by a defender.
+ * A drop on the board. Drops from the sky are sunlight; drops from defenders (Floette, Florges)
+ * are rare candy. [fallTo] is the row it lands on, or null if a defender dropped it.
  * It is collected on its own after landing, so the player does not have to tap it.
  */
-class Sun(var x: Float, var y: Float, val fallTo: Float?) {
+class Sun(var x: Float, var y: Float, val fallTo: Float?, val value: Int) {
     var dead = false
     /** Seconds spent on the ground before it is collected. */
     var hover = 0f
+    val candy: Boolean get() = fallTo == null
 }
 
-/** Candy flying from the board to the HUD counter. The count goes up when it arrives. */
-class Pickup(val x: Float, val y: Float) {
+/** A drop flying from the board to the HUD counter. The count goes up when it arrives. */
+class Pickup(val x: Float, val y: Float, val candy: Boolean, val value: Int) {
     /** 0 at the board, 1 at the HUD. */
     var progress = 0f
     var dead = false
@@ -328,7 +245,14 @@ class Pickup(val x: Float, val y: Float) {
 
 enum class Outcome { RUNNING, WON, LOST }
 
-class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
+class Battle(
+    val level: LevelDef,
+    /** The Pokemon brought into this stage. Only these can be placed. */
+    val loadout: List<DefenderType>,
+    /** Upgrade levels for each Pokemon, read once when it is placed. */
+    private val upgradesFor: (DefenderType) -> Upgrades,
+    private val rng: Random = Random.Default,
+) {
     val defenders = mutableListOf<Defender>()
     val enemies = mutableListOf<Enemy>()
     val projectiles = mutableListOf<Projectile>()
@@ -336,25 +260,22 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
     val suns = mutableListOf<Sun>()
     val pickups = mutableListOf<Pickup>()
 
-    /** One-use lane clearer per row (the lawnmower equivalent). */
+    /**
+     * One rare candy per lane at the house. An enemy that reaches the house steals the candy,
+     * and the lane is cleared once. Reaching the house with no candy left loses the stage.
+     */
     val trapReady = BooleanArray(ROWS) { true }
-    /** Seconds left on the trap flash animation per row. */
+    /** Seconds left on the candy-stolen flash per row. */
     val trapFlash = FloatArray(ROWS)
 
-    /** Legendary helpers already cast in this battle. */
-    val usedLegends = mutableSetOf<LegendType>()
-    /** Legendary effect playing right now, for the screen flash. */
-    var legendEffect: LegendType? = null
+    /** Candies taken by enemies so far. Drives the star rating. */
+    var candyStolen = 0
         private set
-    var legendTimer = 0f
-        private set
-
     /** Short event text shown in the battle banner, e.g. "Sableye stole 25 sun!". */
     var message = ""
         private set
     var messageTimer = 0f
         private set
-
     var sun = level.startSun
         private set
     var outcome = Outcome.RUNNING
@@ -365,7 +286,7 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
     private var spawnTimer = 3f
     private var sunTimer = 3f
 
-    /** Advances the battle by [frameDt] real seconds, scaled by [GAME_SPEED] so everything runs a bit slower. */
+    /** Advances the battle by [frameDt] real seconds, scaled by [GAME_SPEED] so everything runs slower. */
     fun update(frameDt: Float) {
         if (outcome != Outcome.RUNNING) return
         val dt = frameDt * GAME_SPEED
@@ -380,7 +301,6 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
         for (d in defenders) d.hitFlash = max(0f, d.hitFlash - dt)
         for (e in enemies) e.hitFlash = max(0f, e.hitFlash - dt)
         messageTimer = max(0f, messageTimer - dt)
-        legendTimer = max(0f, legendTimer - dt)
 
         defenders.removeAll { it.dead }
         enemies.removeAll { it.dead }
@@ -394,62 +314,27 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
         }
     }
 
-    /** Returns the sun under the given grid-unit point, if any. */
+    /** Returns the drop under the given grid-unit point, if any. */
     fun sunAt(x: Float, y: Float): Sun? =
         suns.firstOrNull { !it.dead && abs(it.x - x) < 0.8f && abs(it.y - y) < 0.8f }
 
-    /** Taps a candy on the board to grab it early. */
+    /** Taps a drop on the board to grab it early. */
     fun collect(s: Sun) {
         if (s.dead) return
         s.dead = true
-        pickups.add(Pickup(s.x, s.y))
+        pickups.add(Pickup(s.x, s.y, s.candy, s.value))
     }
 
-    /** True when the card can be used right now (enough sun, and not a spent legend). */
-    fun canUse(card: Card): Boolean = when (card) {
-        is LegendType -> outcome == Outcome.RUNNING && card !in usedLegends && sun >= card.cost
-        is DefenderType -> outcome == Outcome.RUNNING && sun >= card.cost
-        else -> false
-    }
+    /** True when this Pokemon is in the loadout and there is enough sun to place it. */
+    fun canUse(type: DefenderType): Boolean =
+        outcome == Outcome.RUNNING && type in loadout && sun >= type.cost
 
     fun place(type: DefenderType, row: Int, col: Int): Boolean {
         if (!canUse(type)) return false
         if (defenders.any { it.row == row && it.col == col }) return false
         sun -= type.cost
-        defenders.add(Defender(type, row, col))
+        defenders.add(Defender(type, row, col, computeStats(type, upgradesFor(type))))
         return true
-    }
-
-    /** Casts a legendary helper on the whole board. Returns false if it cannot be used now. */
-    fun summon(type: LegendType): Boolean {
-        if (!canUse(type)) return false
-        sun -= type.cost
-        usedLegends.add(type)
-        legendEffect = type
-        legendTimer = 1.2f
-
-        when (type) {
-            LegendType.ARTICUNO -> {
-                enemies.forEach { if (!it.dead) it.freezeTimer = 5f }
-                say("Articuno froze every enemy!")
-            }
-            LegendType.HO_OH -> {
-                enemies.toList().forEach { damageEnemy(it, 150f) }
-                say("Ho-Oh's Sacred Fire scorched every foe!")
-            }
-            LegendType.MEWTWO -> {
-                enemies.filter { !it.dead }.maxByOrNull { it.hp }?.let { damageEnemy(it, 500f) }
-                say("Mewtwo's Psystrike hit the strongest foe!")
-            }
-        }
-        return true
-    }
-
-    private fun damageEnemy(e: Enemy, amount: Float) {
-        if (e.dead) return
-        e.hp -= amount
-        e.hitFlash = HIT_FLASH
-        if (e.hp <= 0f) e.dead = true
     }
 
     private fun say(text: String) {
@@ -461,13 +346,13 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
         sunTimer -= dt
         if (sunTimer <= 0f) {
             sunTimer = 4.5f + rng.nextFloat() * 2f
-            suns.add(Sun(rng.nextInt(COLS) + 0.5f, -0.5f, rng.nextInt(ROWS) + 0.5f))
+            suns.add(Sun(rng.nextInt(COLS) + 0.5f, -0.5f, rng.nextInt(ROWS) + 0.5f, SUN_VALUE))
         }
         for (s in suns) {
             if (s.dead) continue
             val target = s.fallTo
             if (target != null && s.y < target) s.y = min(target, s.y + FALL_SPEED * dt)
-            // Once it has landed (or was dropped by a defender), it waits briefly and then flies to the HUD
+            // Once it has landed (or a defender dropped it), it waits briefly and then flies up to the HUD
             if (target == null || s.y >= target) {
                 s.hover += dt
                 if (s.hover >= SUN_HOVER_TIME) collect(s)
@@ -482,7 +367,7 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
             if (p.progress >= 1f) {
                 p.progress = 1f
                 p.dead = true
-                sun += SUN_VALUE
+                sun += p.value
             }
         }
     }
@@ -490,54 +375,62 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
     private fun updateDefenders(dt: Float) {
         for (d in defenders) {
             if (d.dead) continue
+            val s = d.stats
             d.timer += dt
 
-            // Healing (Floette, Snorlax)
-            if (d.type.healPerSecond > 0f) {
+            // Healing (Floette, Florges, Snorlax)
+            if (s.heal > 0f) {
                 for (ally in defenders) {
-                    if (!ally.dead && ally.row == d.row && abs(ally.col - d.col) <= d.type.healRange) {
-                        ally.hp = min(ally.type.hp, ally.hp + d.type.healPerSecond * dt)
+                    if (!ally.dead && ally.row == d.row && abs(ally.col - d.col) <= s.healRange) {
+                        ally.hp = min(ally.stats.maxHp, ally.hp + s.heal * dt)
                     }
                 }
             }
 
-            if (d.type.sunInterval > 0f && d.timer >= d.type.sunInterval) {
+            if (s.sunInterval > 0f && d.timer >= s.sunInterval) {
                 d.timer = 0f
-                suns.add(Sun(d.col + 0.5f, d.row + 0.5f, null))
+                suns.add(Sun(d.col + 0.5f, d.row + 0.5f, null, s.sunValue))
             }
 
-            val shooting = d.type.shotInterval > 0f && d.timer >= d.type.shotInterval
-            if (shooting && enemies.any { it.row == d.row && it.x > d.col }) {
+            val shooting = s.shotInterval > 0f && d.timer >= s.shotInterval
+            if (shooting && enemies.any { !it.dead && it.row == d.row && it.x > d.col }) {
                 d.timer = 0f
-                projectiles.add(Projectile(d.row, d.col + 0.8f, d.type.damage, d.type.shotEffect, d.type.pierce))
+                projectiles.add(
+                    Projectile(d.row, d.col + 0.8f, s.damage, d.type.shot, d.type.effect, d.type.pierce, s.projSpeed)
+                )
             }
         }
     }
 
     private fun updateProjectiles(dt: Float) {
         for (p in projectiles) {
-            p.x += PROJECTILE_SPEED * dt
+            p.x += p.speed * dt
             if (p.x > COLS + 1f) {
                 p.dead = true
                 continue
             }
             val target = enemies.firstOrNull {
                 !it.dead && it.row == p.row && it !in p.hit && abs(it.x + 0.4f - p.x) < 0.5f
+            } ?: continue
+            // Sableye's armor reduces shot damage
+            target.hp -= p.damage * (1f - target.type.armor)
+            target.hitFlash = HIT_FLASH
+            when (p.effect) {
+                ShotEffect.BURN -> target.burnTimer = 3f
+                ShotEffect.POISON -> target.poisonTimer = 4f
+                ShotEffect.SLOW -> target.slowTimer = 2f
+                ShotEffect.NONE -> Unit
             }
-            if (target != null) {
-                // Sableye's armor reduces shot damage
-                target.hp -= p.damage * (1f - target.type.armor)
-                target.hitFlash = HIT_FLASH
-                when (p.effect) {
-                    ShotEffect.BURN -> target.burnTimer = 3f
-                    ShotEffect.SLOW -> target.slowTimer = 2f
-                    ShotEffect.NONE -> Unit
-                }
-                if (target.hp <= 0f) target.dead = true
-                p.hit.add(target)
-                if (p.pierce > 0) p.pierce-- else p.dead = true
-            }
+            if (target.hp <= 0f) target.dead = true
+            p.hit.add(target)
+            if (p.pierce > 0) p.pierce-- else p.dead = true
         }
+    }
+
+    private fun hurtDefender(d: Defender, amount: Float) {
+        d.hp -= amount * (1f - d.stats.armor)
+        d.hitFlash = HIT_FLASH
+        if (d.hp <= 0f) d.dead = true
     }
 
     private fun updateEnemyShots(dt: Float) {
@@ -548,13 +441,9 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
                 continue
             }
             val col = floor(s.x).toInt()
-            val target = defenders.firstOrNull { !it.dead && it.row == s.row && it.col == col }
-            if (target != null) {
-                target.hp -= s.damage
-                target.hitFlash = HIT_FLASH
-                if (target.hp <= 0f) target.dead = true
-                s.dead = true
-            }
+            val target = defenders.firstOrNull { !it.dead && it.row == s.row && it.col == col } ?: continue
+            hurtDefender(target, s.damage)
+            s.dead = true
         }
     }
 
@@ -563,10 +452,12 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
             if (e.dead) continue
             val t = e.type
 
-            // Burning hurts every frame until it runs out
-            if (e.burnTimer > 0f) {
-                e.burnTimer -= dt
-                e.hp -= BURN_DPS * dt
+            // Burn and poison tick every frame until they run out
+            if (e.burnTimer > 0f || e.poisonTimer > 0f) {
+                e.burnTimer = max(0f, e.burnTimer - dt)
+                e.poisonTimer = max(0f, e.poisonTimer - dt)
+                if (e.burnTimer > 0f) e.hp -= BURN_DPS * dt
+                if (e.poisonTimer > 0f) e.hp -= POISON_DPS * dt
                 if (e.hp <= 0f) {
                     e.dead = true
                     continue
@@ -574,20 +465,16 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
             }
 
             if (e.x < 0f) {
-                // Reached the house: the lane's trap clears the whole lane once, otherwise you lose.
+                // Reached the house: the lane's candy is stolen once, and the lane is cleared.
+                // With no candy left in that lane, the stage is lost.
                 if (!trapReady[e.row]) {
                     outcome = Outcome.LOST
                     return
                 }
                 trapReady[e.row] = false
                 trapFlash[e.row] = 0.8f
+                candyStolen++
                 enemies.forEach { if (it.row == e.row) it.dead = true }
-                continue
-            }
-
-            // Frozen (Articuno): no movement, no bites, no abilities
-            if (e.freezeTimer > 0f) {
-                e.freezeTimer -= dt
                 continue
             }
 
@@ -605,7 +492,7 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
                 }
             }
 
-            // Ranged shadow ball (Gengar), only when a defender is in its lane to the left
+            // Ranged attack (Gengar, Onix, Magmar, Haunter), only when a defender is in its lane to the left
             if (t.rangedInterval > 0f) {
                 e.timer += dt
                 if (e.timer >= t.rangedInterval && defenders.any { !it.dead && it.row == e.row && it.col < e.x }) {
@@ -622,27 +509,25 @@ class Battle(val level: LevelDef, private val rng: Random = Random.Default) {
 
             val col = floor(e.x).toInt()
             val blocker = defenders.firstOrNull { !it.dead && it.row == e.row && it.col == col }
-            if (blocker != null) {
-                if (t.kamikaze) {
-                    blocker.hp -= t.burst
-                    blocker.hitFlash = HIT_FLASH
-                    if (blocker.hp <= 0f) blocker.dead = true
-                    e.dead = true
-                    continue
-                }
-                val bite = t.dps * dt
-                var damage = bite
-                if (!e.pounced) {
-                    damage += t.burst // Night Slash on first contact (Weavile)
-                    e.pounced = true
-                }
-                blocker.hp -= damage
-                blocker.hitFlash = HIT_FLASH
-                if (t.lifesteal > 0f) e.hp = min(t.hp, e.hp + bite * t.lifesteal) // Leech Life (Zubat)
-                if (blocker.hp <= 0f) blocker.dead = true
-            } else {
+            if (blocker == null) {
                 e.x -= t.speed * speedMul * dt
+                continue
             }
+
+            if (t.kamikaze) {
+                hurtDefender(blocker, t.burst)
+                e.dead = true
+                continue
+            }
+
+            val bite = t.dps * dt
+            var damage = bite
+            if (!e.pounced) {
+                damage += t.burst // first-contact attack, e.g. Night Slash
+                e.pounced = true
+            }
+            hurtDefender(blocker, damage)
+            if (t.lifesteal > 0f) e.hp = min(t.hp, e.hp + bite * t.lifesteal) // Leech Life (Zubat)
         }
     }
 
